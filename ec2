@@ -1,0 +1,7 @@
+sudo file -s /dev/xvdm
+sudo mkfs -t xfs /dev/xvdm
+sudo mkdir /data
+sudo mount /dev/xvdm /data
+curl https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/index.csv > /data/big.csv
+
+https://docs.aws.amazon.com/ebs/latest/userguide/ebs-using-volumes.html
