@@ -13,7 +13,6 @@ where SPLIT(billing_period,'-')[2] = '08'
 group by product['product_name'], line_item_usage_account_name 
 order by cost DESC
 
-
 --FOCUS
 SELECT
   subaccountname, ServiceName,round(SUM(BilledCost),2) AS TotalBilledCost

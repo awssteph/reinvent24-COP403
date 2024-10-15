@@ -26,10 +26,9 @@ snapshot_costs as(
       SPLIT(line_item_resource_id,'/')[2] as snapshot_cur_id,
       SUM(CAST(line_item_unblended_cost AS DECIMAL(16,8))) AS sum_line_item_unblended_cost
     FROM
-      cur
+      "cid_data_export"."cur2"
     WHERE
-      month = '9'
-      AND product_product_name = 'Amazon Elastic Compute Cloud'
+       product['product_name'] = 'Amazon Elastic Compute Cloud'
       AND line_item_usage_type LIKE '%%EBS%%Snapshot%%'
       AND line_item_line_item_type  =  'Usage'
     GROUP BY
