@@ -33,6 +33,7 @@ snapshot_costs as(
       AND line_item_line_item_type  =  'Usage'
     GROUP BY
       line_item_resource_id),
+
 latest_ami as (
       select
             max(date_parse(collection_date, '%Y-%m-%d %T')) as ami_last_collection_date
@@ -44,6 +45,7 @@ recent_amis as (
             description as ami_description,
             latest_ami.ami_last_collection_date
       FROM optimization_data.inventory_ami_data
+      -- only see things that overlap
       INNER JOIN latest_ami ON latest_ami.ami_last_collection_date = date_parse(collection_date, '%Y-%m-%d %T')
 )
 
@@ -51,7 +53,7 @@ SELECT
       recent_snapshots.*,
       recent_amis.*,
       CASE
-            WHEN snapshot_ami_id = imageid THEN 'AMI Avaliable'
+            WHEN snapshot_ami_id = imageid THEN 'AMI Available'
             WHEN snapshot_ami_id LIKE 'ami%' THEN 'AMI Removed'
             ELSE 'Not AMI'
       END AS status,
