@@ -1,5 +1,8 @@
 -- PART 1
 -- How do you find the savings from savings plan in a given month 
+-- SavingsPlanCoveredUsage displays the application of SP on the resource. 
+--savings_plan_savings_plan_effective_cost how much you spent for the resource thanks to th savings plan aka if it was meant t0 be $10 but you had SP it would be $6 (40%)
+--then minus from line_item_unblended_cost which is your OD equivalent charge ($10)
 
 SELECT round(
 		sum(
