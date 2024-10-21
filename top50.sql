@@ -1,57 +1,122 @@
+-- PART 1
+-- let's find the daily unblended cost per resource from 3 days ago
+
 SELECT
-    a.line_item_usage_account_id AS "line_item_usage_account_id",
-    old_line_item_resource_id,
-    old_line_item_unblended_cost AS "cost_three_days_prior",
-    new_line_item_unblended_cost AS "cost_two_days_prior",
-    (new_line_item_unblended_cost - old_line_item_unblended_cost) AS "cost_delta",
-    (((new_line_item_unblended_cost - old_line_item_unblended_cost)/old_line_item_unblended_cost)*100) AS "change_percentage",
-    a.usage_date AS "date_three_days_prior",
-    b.usage_date AS "date_two_days_prior",
-    a.product_product_name AS "product_product_name"
+  line_item_resource_id,
+  line_item_usage_account_id,
+  product['product_name'] AS "product_product_name",
+  DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') AS day_line_item_usage_start_date,
+  SUM(line_item_unblended_cost) AS "sum_line_item_unblended_cost"
 FROM
-(
-    (
-        SELECT
-            distinct "line_item_resource_id" as old_line_item_resource_id,
-            line_item_usage_account_id,
-            product['product_name'] AS product_product_name,
-            DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') usage_date,
-            sum(line_item_unblended_cost) as old_line_item_unblended_cost
-        FROM
-            ${table_name}
-        WHERE
-            "line_item_resource_id" <> ''
-            AND line_item_unblended_cost > 5
-            AND "line_item_usage_start_date" = current_date - INTERVAL '3' DAY
-        GROUP BY
-        1, -- resource id three days prior
-        2, -- account id
-        3, -- product name
-        4 -- usage date
-    ) a
-        
-    FULL OUTER JOIN
-    ( 
-        SELECT 
-            distinct "line_item_resource_id" as new_line_item_resource_id,
-            line_item_usage_account_id,
-            product['product_name'] AS product_product_name,
-            DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') usage_date,
-            SUM(line_item_unblended_cost) as new_line_item_unblended_cost
-        FROM
-            ${table_name}
-        WHERE
-            "line_item_resource_id" <> ''
-            AND line_item_unblended_cost > 5
-            AND "line_item_usage_start_date" = current_date - INTERVAL '2' DAY
-        GROUP BY
-        1, -- resource id two days prior
-        2, -- account id
-        3, -- product name
-        4 -- usage date
-    ) b ON a.old_line_item_resource_id = b.new_line_item_resource_id
+  "cid_data_export"."cur2"
+WHERE
+  line_item_resource_id <> '' -- we don't want usage that doesn't have a resourceid
+  AND line_item_usage_start_date = current_date - INTERVAL '3' DAY -- 3 days ago from today
+GROUP BY 1,2,3,4
+
+------------------------------------------------------------------------------------------
+
+-- PART 2
+-- let's copy and paste PART 1, but change the date filter to two days ago
+
+SELECT
+  line_item_resource_id,
+  line_item_usage_account_id,
+  product['product_name'] AS "product_product_name",
+  DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') AS day_line_item_usage_start_date,
+  SUM(line_item_unblended_cost) AS "sum_line_item_unblended_cost"
+FROM
+  "cid_data_export"."cur2"
+WHERE
+  line_item_resource_id <> ''
+  AND line_item_usage_start_date = current_date - INTERVAL '2' DAY -- changed the interval here
+GROUP BY 1,2,3,4
+
+------------------------------------------------------------------------------------------
+
+-- PART 3
+-- wrap these queries with WITH in prep to join them up
+
+WITH three_days_ago AS (
+  SELECT
+    line_item_resource_id,
+    line_item_usage_account_id,
+    product['product_name'] AS "product_product_name",
+    DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') AS day_line_item_usage_start_date,
+    SUM(line_item_unblended_cost) AS "sum_line_item_unblended_cost"
+  FROM
+    "cid_data_export"."cur2"
+  WHERE
+    line_item_resource_id <> ''
+    AND line_item_usage_start_date = current_date - INTERVAL '3' DAY
+  GROUP BY 1,2,3,4
+),
+
+two_days_ago AS (
+  SELECT
+    line_item_resource_id,
+    line_item_usage_account_id,
+    product['product_name'] AS "product_product_name",
+    DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') AS day_line_item_usage_start_date,
+    SUM(line_item_unblended_cost) AS "sum_line_item_unblended_cost"
+  FROM
+    "cid_data_export"."cur2"
+  WHERE
+    line_item_resource_id <> ''
+    AND line_item_usage_start_date = current_date - INTERVAL '2' DAY
+  GROUP BY 1,2,3,4
 )
+
+------------------------------------------------------------------------------------------
+
+-- PART 4
+-- Writing the final query, where we join the two result sets, calculate the cost delta and percent delta
+
+WITH three_days_ago AS (
+  SELECT
+    line_item_resource_id,
+    line_item_usage_account_id,
+    product['product_name'] AS "product_product_name",
+    DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') AS day_line_item_usage_start_date,
+    SUM(line_item_unblended_cost) AS "sum_line_item_unblended_cost"
+  FROM
+    "cid_data_export"."cur2"
+  WHERE
+    line_item_resource_id <> ''
+    AND line_item_usage_start_date = current_date - INTERVAL '3' DAY
+  GROUP BY 1,2,3,4
+),
+
+two_days_ago AS (
+  SELECT
+    line_item_resource_id,
+    line_item_usage_account_id,
+    product['product_name'] AS "product_product_name",
+    DATE_FORMAT(line_item_usage_start_date,'%Y-%m-%d') AS day_line_item_usage_start_date,
+    SUM(line_item_unblended_cost) AS "sum_line_item_unblended_cost"
+  FROM
+    "cid_data_export"."cur2"
+  WHERE
+    line_item_resource_id <> ''
+    AND line_item_usage_start_date = current_date - INTERVAL '2' DAY
+GROUP BY 1,2,3,4
+)
+
+SELECT
+  three_days_ago.line_item_usage_account_id,
+  three_days_ago.line_item_resource_id,
+  three_days_ago.product_product_name,
+  three_days_ago.day_line_item_usage_start_date AS date_three_days_ago,
+  three_days_ago.sum_line_item_unblended_cost AS cost_three_days_ago,
+  two_days_ago.day_line_item_usage_start_date AS date_two_days_ago,
+  two_days_ago.sum_line_item_unblended_cost AS cost_two_days_ago,
+  (two_days_ago.sum_line_item_unblended_cost - three_days_ago.sum_line_item_unblended_cost) AS cost_delta,
+  ((two_days_ago.sum_line_item_unblended_cost - three_days_ago.sum_line_item_unblended_cost)/three_days_ago.sum_line_item_unblended_cost * 100) AS percent_delta
+FROM
+  three_days_ago FULL OUTER JOIN two_days_ago ON three_days_ago.line_item_resource_id=two_days_ago.line_item_resource_id
 ORDER BY
-    5 DESC, -- cost delta   
-    6 DESC -- change percentage
+  cost_delta DESC,
+  percent_delta DESC
 LIMIT 50;
+
+------------------------------------------------------------------------------------------
