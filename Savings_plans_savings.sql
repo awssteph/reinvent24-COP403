@@ -1,3 +1,4 @@
+--TAKES 10mins
 -- PART 1
 -- How do you find the savings from savings plan in a given month 
 -- SavingsPlanCoveredUsage displays the application of SP on the resource. 
@@ -17,7 +18,9 @@ where SPLIT(billing_period, '-') [ 2 ] = '09'
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 
---Part 2 Getting the rest of the info
+--Part 2 What if there are some teams that are getting the saving that you don't want to?
+-- Maybe you have tags on resources that you want to get this commitment saving and that's what we're gonna be doing 
+--redistributing the saving to people that have tagged resources
 
     --1. Get resource tags for finops
 SELECT resource_tags [ 'user_fin_ops' ] as user_fin_ops,

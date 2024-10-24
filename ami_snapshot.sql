@@ -1,16 +1,25 @@
+--1. get the lastest data
+--2. get extract the connecting data  
+--3  get the cost
+--4. connect it all together
+
+--1. show the snap data and get the collection that its a string from the table info
 with latest_snapshot as (
       select 
-            max(date_parse(collection_date, '%Y-%m-%d %T')) as snapshot_last_collection_date
+            max(date_parse(collection_date, '%Y-%m-%d %T')) as snapshot_collection_date
       FROM optimization_data.inventory_snapshot_data
       ),
 
+-- 2.  Use preview to choose info of base cols and show description has useful info
 recent_snapshots as (      
       SELECT
+            Description,
+            ownerid,
             snapshotid,
             volumeid,
-            starttime,
-            latest_snapshot.snapshot_last_collection_date,
-            ownerid,
+            latest_snapshot.snapshot_collection_date,
+            
+            --copy from saved query 
             CASE
                   WHEN substr(Description, 1, 22) = 'Created by CreateImage' THEN split_part(Description,' ', 5)
                   WHEN substr(Description, 2, 11) = 'Copied snap' THEN split_part(Description,' ', 9)
@@ -18,9 +27,11 @@ recent_snapshots as (
                   ELSE NULL
             END AS snapshot_ami_id
       FROM optimization_data.inventory_snapshot_data
-      INNER JOIN latest_snapshot ON latest_snapshot.snapshot_last_collection_date = date_parse(collection_date, '%Y-%m-%d %T')
+      INNER JOIN latest_snapshot ON latest_snapshot.snapshot_collection_date = date_parse(collection_date, '%Y-%m-%d %T')
 ),
  
+--3  get the cost https://catalog.workshops.aws/cur-query-library/en-US/queries/storage#amazon-ebs-snapshots
+
 snapshot_costs as(
     SELECT
       SPLIT(line_item_resource_id,'/')[2] as snapshot_cur_id,
