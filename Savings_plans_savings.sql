@@ -1,75 +1,99 @@
---1. get the lastest data
---2. get extract the connecting data  
---3  get the cost
---4. connect it all together
+--TAKES 10mins
+-- PART 1
+-- How do you find the savings from savings plan in a given month 
+-- SavingsPlanCoveredUsage displays the application of SP on the resource. 
+--savings_plan_savings_plan_effective_cost how much you spent for the resource thanks to th savings plan aka if it was meant t0 be $10 but you had SP it would be $6 (40%)
+--then minus from line_item_unblended_cost which is your OD equivalent charge ($10)
 
---1. show the snap data and get the collection that its a string from the table info
-with latest_snapshot as (
-      select 
-            max(date_parse(collection_date, '%Y-%m-%d %T')) as snapshot_collection_date
-      FROM optimization_data.inventory_snapshot_data
-      ),
+SELECT round(
+		sum(
+			CASE
+				WHEN "line_item_line_item_type" = 'SavingsPlanCoveredUsage' then "savings_plan_savings_plan_effective_cost" - "line_item_unblended_cost" Else 0
+			END
+		),
+		2
+	) as sum_savings
+FROM "cid_data_export"."cur2"
+where SPLIT(billing_period, '-') [ 2 ] = '09'
 
--- 2.  Use preview to choose info of base cols and show description has useful info
-recent_snapshots as (      
-      SELECT
-            Description,
-            ownerid,
-            snapshotid,
-            latest_snapshot.snapshot_collection_date,
-            
-            --copy from saved query 
-            CASE
-                  WHEN substr(Description, 1, 22) = 'Created by CreateImage' THEN split_part(Description,' ', 5)
-                  WHEN substr(Description, 2, 11) = 'Copied snap' THEN split_part(Description,' ', 9)
-                  WHEN substr(Description, 1, 22) = 'Copied for Destination' THEN split_part(Description,' ', 4)
-                  ELSE NULL
-            END AS snapshot_ami_id
-      FROM optimization_data.inventory_snapshot_data
-      INNER JOIN latest_snapshot ON latest_snapshot.snapshot_collection_date = date_parse(collection_date, '%Y-%m-%d %T')
-),
- 
---3  get the cost https://catalog.workshops.aws/cur-query-library/en-US/queries/storage#amazon-ebs-snapshots
+----------------------------------------------------------------------------------------------------------------------------------------
 
-snapshot_costs as(
-    SELECT
-      SPLIT(line_item_resource_id,'/')[2] as snapshot_cur_id,
-      SUM(CAST(line_item_unblended_cost AS DECIMAL(16,8))) AS sum_line_item_unblended_cost
-    FROM
-      "cid_data_export"."cur2"
-    WHERE
-       product['product_name'] = 'Amazon Elastic Compute Cloud'
-      AND line_item_usage_type LIKE '%%EBS%%Snapshot%%'
-      AND line_item_line_item_type  =  'Usage'
-    GROUP BY
-      line_item_resource_id),
+--Part 2 What if there are some teams that are getting the saving that you don't want to?
+-- Maybe you have tags on resources that you want to get this commitment saving and that's what we're gonna be doing 
+--redistributing the saving to people that have tagged resources
 
-latest_ami as (
-      select
-            max(date_parse(collection_date, '%Y-%m-%d %T')) as ami_last_collection_date
-      FROM optimization_data.inventory_ami_data
-      ),
-recent_amis as (
-      SELECT
-            imageid,
-            description as ami_description,
-            latest_ami.ami_last_collection_date
-      FROM optimization_data.inventory_ami_data
-      -- only see things that overlap
-      INNER JOIN latest_ami ON latest_ami.ami_last_collection_date = date_parse(collection_date, '%Y-%m-%d %T')
+    --1. Get resource tags for finops
+SELECT resource_tags [ 'user_fin_ops' ] as user_fin_ops,
+	SPLIT(billing_period, '-') [ 2 ] as month,
+	SPLIT(billing_period, '-') [ 1 ] as year,
+	--2. get unblnded costs 
+	sum(line_item_unblended_cost) as sum_line_item_unblended_cost,
+	--3. get tagged spend as in what will the proportion of spend be without the untagged spend
+	sum(
+		CASE
+			WHEN resource_tags [ 'user_fin_ops' ] is not null then line_item_unblended_cost ELSE 0
+		END
+	) as sum_tagged_spend,
+	--4. Savings we got from savings plans
+	round(
+		sum(
+			CASE
+				WHEN "line_item_line_item_type" = 'SavingsPlanCoveredUsage' then "savings_plan_savings_plan_effective_cost" - "line_item_unblended_cost" Else 0
+			END
+		),
+		2
+	) as sum_savings
+FROM "cid_data_export"."cur2"
+WHERE SPLIT(billing_period, '-') [ 2 ] = '09'
+GROUP BY 1,
+	2,
+	3
+
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+
+-- PART 3 redistribution
+with unblended as (
+    --1. Get resource tags for finops
+	SELECT resource_tags [ 'user_fin_ops' ] as user_fin_ops,
+		SPLIT(billing_period, '-') [ 2 ] as month,
+		SPLIT(billing_period, '-') [ 1 ] as year,
+    --2. get unblnded costs 
+
+		sum(line_item_unblended_cost) as sum_line_item_unblended_cost,
+    --3. get tagged spend as in what will the proportion of spend be without the untagged spend
+		sum(		CASE WHEN resource_tags [ 'user_fin_ops' ] is not null then line_item_unblended_cost ELSE 0 END ) as sum_tagged_spend,
+    --4. Savings we got from savings plans
+
+		round(
+			sum(
+				CASE
+					WHEN "line_item_line_item_type" = 'SavingsPlanCoveredUsage' then "savings_plan_savings_plan_effective_cost" - "line_item_unblended_cost" Else 0
+				END
+			),
+			2
+		) as sum_savings
+	FROM "cid_data_export"."cur2"
+	group by 1,
+		2,
+		3
 )
+SELECT *,
+-- * Make the total savings per tag. The over is going to what you are splitting by. aka Per month savings 
 
-SELECT
-      recent_snapshots.*,
-      recent_amis.*,
-      CASE
-            WHEN snapshot_ami_id = imageid THEN 'AMI Available'
-            WHEN snapshot_ami_id LIKE 'ami%' THEN 'AMI Removed'
-            ELSE 'Not AMI'
-      END AS status,
-      snapshot_costs.sum_line_item_unblended_cost
-FROM recent_snapshots
-LEFT JOIN recent_amis ON recent_snapshots.snapshot_ami_id = recent_amis.imageid 
-LEFT JOIN snapshot_costs on recent_snapshots.snapshotid = snapshot_costs.snapshot_cur_id 
-WHERE snapshot_ami_id is not NULL
-order by snapshotid
+
+	sum(sum_savings) over (partition by month, year) as total_savings,
+	sum(sum_tagged_spend) over (partition by month, year) as total_spend,
+	CASE
+		WHEN user_fin_ops is not null then sum_line_item_unblended_cost / sum(sum_tagged_spend) over (partition by month, year) ELSE 0
+	END as percentage_spend,
+	CASE
+		WHEN user_fin_ops is not null then sum_line_item_unblended_cost / sum(sum_tagged_spend) over (partition by month, year) ELSE 0
+	END *
+	sum(sum_savings) over (partition by month, year) + sum_line_item_unblended_cost as charge_amount
+	
+	
+	
+FROM unblended
+where month = '09'
