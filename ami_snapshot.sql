@@ -16,7 +16,6 @@ recent_snapshots as (
             Description,
             ownerid,
             snapshotid,
-            volumeid,
             latest_snapshot.snapshot_collection_date,
             
             --copy from saved query 
