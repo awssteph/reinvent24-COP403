@@ -43,7 +43,7 @@ WITH three_days_ago AS (
     line_item_usage_account_name,
     product [ 'product_name' ] AS "product_product_name",
     DATE_FORMAT(line_item_usage_start_date, '%Y-%m-%d') AS day_line_item_usage_start_date,
-    sum(line_item_unblended_cost) AS cost
+    SUM(line_item_unblended_cost) AS cost
   FROM 
     "cid_data_export"."cur2"
   WHERE 
